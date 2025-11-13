@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DeVID Vault — Demo</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main class="card">
+    <h1>DeVID Vault — MVP</h1>
+
+    <section id="wallet">
+      <button id="connectBtn">Connect Wallet</button>
+      <div id="addr" class="muted"></div>
+      <div id="network" class="muted"></div>
+    </section>
+
+    <hr/>
+
+    <section id="uploadSection" class="hidden">
+      <h2>Upload & Register File</h2>
+      <input id="fileInput" type="file" />
+      <input id="web3Token" type="text" placeholder="Web3.Storage API token" />
+      <button id="uploadBtn">Encrypt → Upload → Register</button>
+      <div id="status" class="muted"></div>
+    </section>
+
+    <hr/>
+
+    <section id="vaultsSection" class="hidden">
+      <h2>Your Vaults</h2>
+      <div id="vaultList"></div>
+    </section>
+
+    <hr/>
+
+    <section id="accessSection" class="hidden">
+      <h2>Grant / Revoke Access</h2>
+      <input id="vaultIdInput" placeholder="Vault ID (number)" />
+      <input id="addrInput" placeholder="Address to grant/revoke (0x...)" />
+      <div class="row">
+        <button id="grantBtn">Grant Access</button>
+        <button id="revokeBtn">Revoke Access</button>
+      </div>
+      <div id="accessStatus" class="muted"></div>
+    </section>
+
+    <footer class="muted small">
+      Deploy network: Polygon Amoy (testnet) or Localhost (for dev). Make sure MetaMask network matches.
+    </footer>
+  </main>
+
+  <!-- libs -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

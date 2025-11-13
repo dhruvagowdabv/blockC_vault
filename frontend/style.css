@@ -1,0 +1,22 @@
+:root{
+  --bg:#0f1724;
+  --card:#0b1220;
+  --accent:#6ee7b7;
+  --muted:#9aa6b2;
+  --white:#e6eef6;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;background:linear-gradient(180deg,#071021 0%, #0b1220 100%);color:var(--white)}
+.card{max-width:880px;margin:28px auto;padding:22px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow:0 8px 30px rgba(2,6,23,0.6)}
+h1{margin:0 0 8px;font-size:20px}
+h2{font-size:16px;margin:10px 0}
+button{background:transparent;border:1px solid var(--accent);color:var(--accent);padding:8px 12px;border-radius:8px;cursor:pointer}
+button:hover{opacity:0.95}
+input[type=file]{color:var(--muted)}
+input,textarea{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--white);width:100%;margin-top:8px}
+.hidden{display:none}
+.muted{color:var(--muted);margin-top:8px}
+.small{font-size:12px}
+#vaultList > .vault {border:1px dashed rgba(255,255,255,0.04);padding:10px;margin:8px 0;border-radius:8px}
+.row{display:flex;gap:8px;align-items:center}
+.addrShort{font-weight:600;color:var(--accent)}
