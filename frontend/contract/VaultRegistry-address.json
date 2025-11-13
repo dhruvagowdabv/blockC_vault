@@ -1,0 +1,7 @@
+@"
+{
+  "VaultRegistry": "0xPASTE_YOUR_DEPLOYED_CONTRACT_ADDRESS_HERE"
+}
+"@ | Out-File -FilePath "frontend\contract\VaultRegistry-address.json" -Encoding utf8
+
+Write-Host "Created frontend\contract\VaultRegistry-address.json — open it and replace the placeholder address with your deployed contract address."
