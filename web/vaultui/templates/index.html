@@ -53,6 +53,36 @@
       <h2>Your Vaults</h2>
       <div id="vaultList" class="vault-grid"></div>
     </section>
+    <!-- PROCESS / OCR UI -->
+<hr/>
+
+<section id="processSection" class="hidden">
+  <h2>OCR → Verify → Generate PDF</h2>
+
+  <div class="row" style="gap:12px; align-items:center;">
+    <input id="processFileInput" type="file" accept="image/*,application/pdf" />
+    <button id="processBtn">Process Document</button>
+    <button id="downloadPdfBtn" class="hidden">Download PDF</button>
+    <button id="storePdfBtn" class="hidden">Store PDF → IPFS</button>
+  </div>
+
+  <div id="processStatus" class="muted">Pick an image / scanned PDF and click Process.</div>
+
+  <!-- Preview area -->
+  <div id="processPreview" class="hidden" style="margin-top:12px;">
+    <h3>Preview</h3>
+    <div class="row" style="align-items:flex-start;">
+      <div id="facePreview" style="width:140px;height:140px;border-radius:8px;background:#071323;display:flex;align-items:center;justify-content:center;">
+        <span class="muted small">face</span>
+      </div>
+      <div style="flex:1;margin-left:12px;">
+        <div><strong>Extracted fields</strong></div>
+        <pre id="extractedJson" style="white-space:pre-wrap;max-height:220px;overflow:auto;background:transparent;border:1px solid rgba(255,255,255,0.02);padding:8px;border-radius:8px;"></pre>
+        <div style="margin-top:8px;"><strong>Authenticity</strong> <span id="authSummary" class="muted"></span></div>
+      </div>
+    </div>
+  </div>
+</section>
 
     <footer class="muted small">
       Deploy network: Polygon Amoy (testnet) or Localhost. Use MetaMask and make sure network matches.
@@ -67,5 +97,7 @@
 
   <!-- main app logic (will be created next) -->
   <script type="module" src="{% static 'js/app-main.js' %}"></script>
+  <script type="module" src="{% static 'js/process.js' %}"></script>
+
 </body>
 </html>

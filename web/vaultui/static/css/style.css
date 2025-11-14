@@ -34,3 +34,10 @@ button.btn:disabled{opacity:0.5;cursor:not-allowed}
   .grid.two{grid-template-columns:1fr}
   main.card{margin:12px;padding:14px}
 }
+
+/* process.css (append to style.css or use separate file) */
+#processPreview img { max-width: 100%; border-radius: 8px; }
+#processPreview pre { background-color: rgba(255,255,255,0.02); padding: 8px; border-radius: 6px; }
+#processSection .row { gap: 10px; }
+button.hidden { display: none !important; }
+
