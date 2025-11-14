@@ -1,9 +1,12 @@
 // frontend/app.js (module)
-// Note: this file uses Web3.Storage via dynamic import when needed to avoid extra CDNs.
-// It uses native Web Crypto (Subtle) for AES-GCM encryption.
+// Clean merged file: single declarations + robust connect handler
 
+console.log('app.js loaded at', location.href);
+
+// ---------- helpers
 const short = (a) => a ? `${a.slice(0,6)}...${a.slice(-4)}` : '';
 
+// ---------- DOM elements (single declaration)
 const connectBtn = document.getElementById('connectBtn');
 const addrEl = document.getElementById('addr');
 const networkEl = document.getElementById('network');
@@ -23,81 +26,121 @@ const grantBtn = document.getElementById('grantBtn');
 const revokeBtn = document.getElementById('revokeBtn');
 const accessStatus = document.getElementById('accessStatus');
 
+// ---------- contract state
 let CONTRACT_ADDRESS = null;
 let CONTRACT_ABI = null;
+let provider, signer, contract;
+let connectPending = false;
 
+// ---------- load contract files
 async function loadContractFiles(){
   try {
-    const addrResp = await fetch('./contract/VaultRegistry-address.json');
-    const abiResp = await fetch('./contract/VaultRegistry-abi.json');
+    // adapt path depending on where static is served
+    const addrResp = await fetch('/static/contract/VaultRegistry-address.json');
+    const abiResp = await fetch('/static/contract/VaultRegistry-abi.json');
     if(!addrResp.ok || !abiResp.ok) {
-      statusEl.textContent = 'Contract files not found under frontend/contract. Please add ABI + address.';
+      statusEl && (statusEl.textContent = 'Contract files not found in static/contract. Please add ABI + address.');
       return;
     }
     const addrJson = await addrResp.json();
-    CONTRACT_ADDRESS = addrJson.VaultRegistry;
+    CONTRACT_ADDRESS = addrJson.VaultRegistry || addrJson.address || addrJson.contractAddress || Object.values(addrJson)[0];
     CONTRACT_ABI = await abiResp.json();
     console.log('Loaded contract address', CONTRACT_ADDRESS);
   } catch(e){
     console.error('Failed to load contract files', e);
-    statusEl.textContent = 'Failed loading contract files: ' + (e.message || e);
+    statusEl && (statusEl.textContent = 'Failed loading contract files: ' + (e.message || e));
   }
 }
 
-// provider/signer/contract
-let provider, signer, contract;
-
-async function connectWallet(){
+// ---------- robust connect handler (uses provider.send)
+async function robustConnectWallet(){
+  console.log('robustConnectWallet start');
   if(!window.ethereum) {
-    alert('Install MetaMask to use this demo');
+    alert('MetaMask not detected. Install MetaMask and reload the page.');
     return;
   }
-  provider = new ethers.providers.Web3Provider(window.ethereum);
-  await provider.send("eth_requestAccounts", []);
-  signer = provider.getSigner();
-  const address = await signer.getAddress();
-  addrEl.textContent = `Connected: ${short(address)}`;
-  connectBtn.textContent = 'Connected';
-  connectBtn.disabled = true;
+  if (connectPending) {
+    console.log('connect request already pending');
+    statusEl && (statusEl.textContent = 'Connection request already pending — check MetaMask.');
+    return;
+  }
+  connectPending = true;
+  if (connectBtn) { connectBtn.disabled = true; connectBtn.textContent = 'Connecting...'; }
+  statusEl && (statusEl.textContent = 'Requesting wallet connection...');
 
-  const net = await provider.getNetwork();
-  networkEl.textContent = `Network: ${net.name} (${net.chainId})`;
+  try {
+    provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
+    console.log('provider created — sending eth_requestAccounts');
+    await provider.send('eth_requestAccounts', []); // the working call
+    console.log('eth_requestAccounts resolved');
 
-  // If not on Amoy and not local, try to add Amoy (user may decline)
-  if(net.chainId !== 80002 && net.chainId !== 31337 && net.chainId !== 1337) {
-    try {
-      await window.ethereum.request({
-        method: 'wallet_addEthereumChain',
-        params: [{
-          chainId: '0x13882',
-          chainName: 'Polygon Amoy',
-          rpcUrls: ['https://rpc-amoy.polygon.technology/'],
-          nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
-          blockExplorerUrls: ['https://amoy.polygonscan.com']
-        }]
-      });
-    } catch(_) {
-      console.warn('User declined add chain or error');
+    signer = provider.getSigner();
+    const address = await signer.getAddress();
+    addrEl && (addrEl.textContent = `Connected: ${short(address)}`);
+    if (connectBtn) { connectBtn.textContent = 'Connected'; connectBtn.disabled = true; }
+    const net = await provider.getNetwork();
+    networkEl && (networkEl.textContent = `Network: ${net.name} (${net.chainId})`);
+
+    // optional: try to add Polygon Amoy if not present
+    if(net.chainId !== 80002 && net.chainId !== 31337 && net.chainId !== 1337) {
+      try {
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: '0x13882',
+            chainName: 'Polygon Amoy',
+            rpcUrls: ['https://rpc-amoy.polygon.technology/'],
+            nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
+            blockExplorerUrls: ['https://amoy.polygonscan.com']
+          }]
+        });
+      } catch(e) { console.warn('User declined chain add/switch', e); }
     }
+
+    if(!CONTRACT_ADDRESS || !CONTRACT_ABI) {
+      statusEl && (statusEl.textContent = 'Contract files missing; add ABI + address then reload.');
+    } else {
+      contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+      uploadSection && uploadSection.classList.remove('hidden');
+      vaultsSection && vaultsSection.classList.remove('hidden');
+      accessSection && accessSection.classList.remove('hidden');
+      const saved = localStorage.getItem('web3storage_token_v1');
+      if (saved && web3TokenInput && !web3TokenInput.value) web3TokenInput.value = saved;
+      await refreshVaults();
+      statusEl && (statusEl.textContent = 'Connected');
+    }
+  } catch (err) {
+    console.error('connect error', err);
+    if (err && err.code === -32002) {
+      statusEl && (statusEl.textContent = 'MetaMask request pending — please check the extension popup and approve.');
+    } else {
+      statusEl && (statusEl.textContent = 'Connection failed: ' + (err.message || err));
+      alert('Connection failed or was rejected. Check MetaMask.');
+    }
+    if (connectBtn) { connectBtn.disabled = false; connectBtn.textContent = 'Connect Wallet'; }
+  } finally {
+    connectPending = false;
   }
-
-  if(!CONTRACT_ADDRESS || !CONTRACT_ABI) {
-    statusEl.textContent = 'Contract files missing in frontend/contract. Add them and reload.';
-    return;
-  }
-
-  contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-
-  uploadSection.classList.remove('hidden');
-  vaultsSection.classList.remove('hidden');
-  accessSection.classList.remove('hidden');
-
-  await refreshVaults();
 }
 
-connectBtn.addEventListener('click', connectWallet);
+// attach listener (direct + delegated fallback)
+if (connectBtn) {
+  console.log('connectBtn found, attaching listener');
+  connectBtn.addEventListener('click', async (ev) => {
+    console.log('connectBtn clicked');
+    await robustConnectWallet();
+  });
+} else {
+  console.warn('connectBtn not found — attaching delegated listener');
+  document.addEventListener('click', async (ev) => {
+    if (ev.target && (ev.target.id === 'connectBtn' || (ev.target.closest && ev.target.closest('#connectBtn')))) {
+      console.log('delegated connectBtn clicked');
+      await robustConnectWallet();
+    }
+  });
+}
 
-// ---------- Crypto helpers (AES-GCM, password-based)
+// ---------- encryption helpers (unchanged)
 async function deriveKeyFromPassword(password) {
   const enc = new TextEncoder();
   const pw = enc.encode(password);
@@ -130,53 +173,53 @@ async function decryptBlobToFile(blob, password, filename='file') {
   return new File([plain], filename);
 }
 
-// ---------- IPFS (Web3.Storage) dynamic import when needed
+// ---------- Web3.Storage dynamic import (unchanged)
 async function uploadToWeb3Storage(token, blob) {
-  // dynamic import to avoid bundling issues
   const { Web3Storage } = await import('https://cdn.jsdelivr.net/npm/web3.storage/dist/bundle.esm.min.js');
   const client = new Web3Storage({ token });
   const cid = await client.put([new File([blob], 'encrypted.bin')], { wrapWithDirectory: false });
   return cid;
 }
 
-// ---------- Upload flow
-uploadBtn.addEventListener('click', async () => {
-  const file = fileInput.files[0];
-  const token = web3TokenInput.value.trim();
-  if(!file) { statusEl.textContent = 'Pick a file first'; return; }
-  if(!token) { statusEl.textContent = 'Enter Web3.Storage API token'; return; }
+// ---------- Upload flow (modify if you use server proxy)
+uploadBtn && uploadBtn.addEventListener('click', async () => {
+  const file = fileInput?.files?.[0];
+  const token = web3TokenInput?.value?.trim();
+  if(!file) { statusEl && (statusEl.textContent = 'Pick a file first'); return; }
+  if(!token) { statusEl && (statusEl.textContent = 'Enter Web3.Storage API token'); return; }
 
   try {
-    statusEl.textContent = 'Choose passphrase to encrypt (remember it!)';
+    statusEl && (statusEl.textContent = 'Choose passphrase to encrypt (remember it!)');
     const pass = prompt('Enter passphrase to encrypt the file (keep safe):', 'vault-pass');
-    if(!pass) { statusEl.textContent = 'Encryption cancelled'; return; }
+    if(!pass) { statusEl && (statusEl.textContent = 'Encryption cancelled'); return; }
 
-    statusEl.textContent = 'Encrypting file locally...';
+    statusEl && (statusEl.textContent = 'Encrypting file locally...');
     const encrypted = await encryptFileBlob(file, pass);
 
-    statusEl.textContent = 'Uploading encrypted file to Web3.Storage...';
+    statusEl && (statusEl.textContent = 'Uploading encrypted file to Web3.Storage...');
     const cid = await uploadToWeb3Storage(token, encrypted);
 
-    statusEl.textContent = `Uploaded CID ${cid} — sending store tx...`;
+    statusEl && (statusEl.textContent = `Uploaded CID ${cid} — sending store tx...`);
     const tx = await contract.store(cid);
-    statusEl.textContent = 'Waiting for confirmation...';
+    statusEl && (statusEl.textContent = 'Waiting for confirmation...');
     await tx.wait();
-    statusEl.textContent = `Stored on-chain. Tx ${tx.hash}`;
+    statusEl && (statusEl.textContent = `Stored on-chain. Tx ${tx.hash}`);
     await refreshVaults();
   } catch(e){
     console.error(e);
-    statusEl.textContent = 'Error: ' + (e.message || e);
+    statusEl && (statusEl.textContent = 'Error: ' + (e.message || e));
   }
 });
 
-// ---------- UI: list vaults and download
+// ---------- Vaults listing and download (unchanged)
 async function refreshVaults(){
-  vaultList.innerHTML = '';
+  vaultList && (vaultList.innerHTML = '');
   try {
+    if(!signer || !contract) { vaultList && (vaultList.innerHTML = '<div class="muted">Connect first.</div>'); return; }
     const address = await signer.getAddress();
     const ids = await contract.vaultsOfOwner(address);
     if(!ids || ids.length === 0){
-      vaultList.innerHTML = '<div class="muted">No vaults found.</div>';
+      vaultList && (vaultList.innerHTML = '<div class="muted">No vaults found.</div>');
       return;
     }
     for(let i=0;i<ids.length;i++){
@@ -192,7 +235,7 @@ async function refreshVaults(){
         <div>CID: <span class="addrShort">${cid}</span></div>
         <div class="row"><button data-id="${id}" class="downloadBtn">Download & Decrypt</button></div>
       `;
-      vaultList.appendChild(div);
+      vaultList && vaultList.appendChild(div);
     }
 
     // attach download handlers
@@ -203,56 +246,56 @@ async function refreshVaults(){
         try {
           cid = await contract.getCid(id);
         } catch(e2){ alert('No access to read CID'); return; }
-        const token = web3TokenInput.value.trim();
+        const token = web3TokenInput?.value?.trim();
         if(!token){ alert('Enter Web3.Storage token to fetch file'); return; }
-        statusEl.textContent = 'Fetching encrypted file from IPFS...';
+        statusEl && (statusEl.textContent = 'Fetching encrypted file from IPFS...');
         const url = `https://${cid}.ipfs.dweb.link/encrypted.bin`;
         const resp = await fetch(url);
+        if(!resp.ok){ alert('Failed to fetch from public gateways.'); return; }
         const blob = await resp.blob();
         const pass = prompt('Enter passphrase to decrypt file:');
-        if(!pass){ statusEl.textContent='Decryption cancelled'; return; }
+        if(!pass){ statusEl && (statusEl.textContent='Decryption cancelled'); return; }
         try {
           const file = await decryptBlobToFile(blob, pass, `vault-${id}-download`);
           const urlObj = URL.createObjectURL(file);
-          const a = document.createElement('a');
-          a.href = urlObj; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
-          statusEl.textContent = 'Downloaded and decrypted locally.';
+          const a = document.createElement('a'); a.href = urlObj; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+          statusEl && (statusEl.textContent = 'Downloaded and decrypted locally.');
         } catch(e){
           console.error(e);
-          statusEl.textContent = 'Decryption failed: wrong passphrase or corrupted file';
+          statusEl && (statusEl.textContent = 'Decryption failed: wrong passphrase or corrupted file');
         }
       });
     });
 
   } catch(e){
     console.error(e);
-    vaultList.innerHTML = '<div class="muted">Error fetching vaults; are you connected?</div>';
+    vaultList && (vaultList.innerHTML = '<div class="muted">Error fetching vaults; are you connected?</div>');
   }
 }
 
-// Grant / revoke handlers
-grantBtn.addEventListener('click', async ()=>{
-  const id = vaultIdInput.value.trim();
-  const who = addrInput.value.trim();
-  if(!id || !who) { accessStatus.textContent = 'fill vault id and address'; return; }
+// Grant / revoke handlers (unchanged)
+grantBtn && grantBtn.addEventListener('click', async ()=>{
+  const id = vaultIdInput?.value?.trim();
+  const who = addrInput?.value?.trim();
+  if(!id || !who) { accessStatus && (accessStatus.textContent = 'fill vault id and address'); return; }
   try {
     const tx = await contract.grantAccess(id, who);
-    accessStatus.textContent = 'tx sent, waiting...';
+    accessStatus && (accessStatus.textContent = 'tx sent, waiting...');
     await tx.wait();
-    accessStatus.textContent = 'Access granted.';
-  } catch(e){ accessStatus.textContent = 'Error: ' + (e.message || e); console.error(e); }
+    accessStatus && (accessStatus.textContent = 'Access granted.');
+  } catch(e){ accessStatus && (accessStatus.textContent = 'Error: ' + (e.message || e)); console.error(e); }
 });
 
-revokeBtn.addEventListener('click', async ()=>{
-  const id = vaultIdInput.value.trim();
-  const who = addrInput.value.trim();
-  if(!id || !who) { accessStatus.textContent = 'fill vault id and address'; return; }
+revokeBtn && revokeBtn.addEventListener('click', async ()=>{
+  const id = vaultIdInput?.value?.trim();
+  const who = addrInput?.value?.trim();
+  if(!id || !who) { accessStatus && (accessStatus.textContent = 'fill vault id and address'); return; }
   try {
     const tx = await contract.revokeAccess(id, who);
-    accessStatus.textContent = 'tx sent, waiting...';
+    accessStatus && (accessStatus.textContent = 'tx sent, waiting...');
     await tx.wait();
-    accessStatus.textContent = 'Access revoked.';
-  } catch(e){ accessStatus.textContent = 'Error: ' + (e.message || e); console.error(e); }
+    accessStatus && (accessStatus.textContent = 'Access revoked.');
+  } catch(e){ accessStatus && (accessStatus.textContent = 'Error: ' + (e.message || e)); console.error(e); }
 });
 
 // load contract files on start

@@ -1,0 +1,12 @@
+[
+  {
+    "status_code": 401,
+    "raw": {
+      "ok": false,
+      "error": {
+        "code": "ERROR_MALFORMED_TOKEN",
+        "message": "API Key is malformed or failed to parse."
+      }
+    }
+  }
+]
